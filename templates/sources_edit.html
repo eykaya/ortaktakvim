@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Edit Calendar Source - Calendar Aggregator{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 600px;">
+    <h2>Edit Calendar Source: {{ source.name }}</h2>
+    
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    
+    <form method="POST" action="/sources/{{ source.id }}/edit">
+        <div class="form-group">
+            <label for="name">Source Name</label>
+            <input type="text" id="name" name="name" value="{{ source.name }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label>Source Type</label>
+            <input type="text" value="{{ source.source_type.value }}" disabled class="text-muted">
+            <input type="hidden" name="source_type" value="{{ source.source_type.value }}">
+        </div>
+        
+        {% if source.source_type.value == 'google_calendar' %}
+        <div class="form-group">
+            <label for="google_calendar_id">Calendar ID</label>
+            <input type="text" id="google_calendar_id" name="google_calendar_id" 
+                   value="{{ source.google_calendar_id or 'primary' }}">
+        </div>
+        {% else %}
+        <div class="form-group">
+            <label for="caldav_url">CalDAV URL</label>
+            <input type="url" id="caldav_url" name="caldav_url" value="{{ source.caldav_url or '' }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" value="{{ source.username or '' }}">
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password (leave empty to keep current)</label>
+            <input type="password" id="password" name="password" placeholder="Leave empty to keep current password">
+        </div>
+        {% endif %}
+        
+        <div class="form-group">
+            <div class="form-check">
+                <input type="checkbox" id="masking" name="masking" {% if source.masking %}checked{% endif %}>
+                <label for="masking">Enable Masking (show events as "Busy" in published calendar)</label>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <div class="form-check">
+                <input type="checkbox" id="is_enabled" name="is_enabled" {% if source.is_enabled %}checked{% endif %}>
+                <label for="is_enabled">Enabled (include in sync and unified calendar)</label>
+            </div>
+        </div>
+        
+        <div class="actions mt-4">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

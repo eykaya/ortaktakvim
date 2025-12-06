@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Application Logs - Calendar Aggregator{% endblock %}
+
+{% block content %}
+<div class="tabs">
+    <a href="/admin">Users</a>
+    <a href="/settings">OAuth Settings</a>
+    <a href="/admin/logs" class="active">Logs</a>
+</div>
+
+<div class="card">
+    <h2>Filter Logs</h2>
+    <form method="GET" action="/admin/logs" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-group" style="margin-bottom:0;">
+            <label for="level">Level</label>
+            <select id="level" name="level">
+                <option value="">All Levels</option>
+                <option value="ERROR" {% if current_level == 'ERROR' %}selected{% endif %}>ERROR</option>
+                <option value="WARNING" {% if current_level == 'WARNING' %}selected{% endif %}>WARNING</option>
+                <option value="INFO" {% if current_level == 'INFO' %}selected{% endif %}>INFO</option>
+                <option value="DEBUG" {% if current_level == 'DEBUG' %}selected{% endif %}>DEBUG</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label for="hours">Time Range</label>
+            <select id="hours" name="hours">
+                <option value="1" {% if current_hours == 1 %}selected{% endif %}>Last 1 hour</option>
+                <option value="6" {% if current_hours == 6 %}selected{% endif %}>Last 6 hours</option>
+                <option value="24" {% if current_hours == 24 %}selected{% endif %}>Last 24 hours</option>
+                <option value="72" {% if current_hours == 72 %}selected{% endif %}>Last 3 days</option>
+                <option value="168" {% if current_hours == 168 %}selected{% endif %}>Last 7 days</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+            <label for="limit">Max Results</label>
+            <select id="limit" name="limit">
+                <option value="50" {% if current_limit == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if current_limit == 100 %}selected{% endif %}>100</option>
+                <option value="200" {% if current_limit == 200 %}selected{% endif %}>200</option>
+                <option value="500" {% if current_limit == 500 %}selected{% endif %}>500</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+    </form>
+</div>
+
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2>Logs ({{ logs|length }} entries)</h2>
+        <form method="POST" action="/admin/logs/clear" style="display:inline;">
+            <input type="hidden" name="days" value="30">
+            <button type="submit" class="btn btn-sm btn-warning" onclick="return confirm('Clear logs older than 30 days?');">
+                Clear Old Logs
+            </button>
+        </form>
+    </div>
+    
+    {% if logs %}
+    <div style="max-height:600px; overflow-y:auto;">
+        {% for log in logs %}
+        <div class="log-entry log-{{ log.level|lower }}">
+            <span class="log-time">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            <span class="log-level">{{ log.level }}</span>
+            {% if log.source %}
+            <span class="log-source">[{{ log.source }}]</span>
+            {% endif %}
+            <span class="log-message">{{ log.message }}</span>
+            {% if log.details %}
+            <div style="margin-top:0.5rem; padding-left:1rem; color:#666; font-size:0.8rem;">
+                {{ log.details }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No logs found for the selected filters.</p>
+    {% endif %}
+</div>
+{% endblock %}

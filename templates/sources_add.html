@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Add Calendar Source - Calendar Aggregator{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 700px;">
+    <h2>Add Calendar Source</h2>
+    
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+    
+    {% if message %}
+    <div class="alert alert-success">{{ message }}</div>
+    {% endif %}
+    
+    <form method="POST" action="/sources/add">
+        <div class="form-group">
+            <label for="name">Source Name</label>
+            <input type="text" id="name" name="name" placeholder="e.g., Google Personal, Work O365, iCloud" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="source_type">Source Type</label>
+            <select id="source_type" name="source_type" required onchange="toggleFields()">
+                <option value="">-- Select Source Type --</option>
+                <optgroup label="OAuth (Recommended)">
+                    <option value="google_calendar">Google Calendar (OAuth - Read Only)</option>
+                    <option value="outlook_oauth">Microsoft Outlook (OAuth - Read Only)</option>
+                </optgroup>
+                <optgroup label="Public Calendars">
+                    <option value="ics_feed">ICS/Webcal Feed (Public Shared Calendar)</option>
+                </optgroup>
+                <optgroup label="CalDAV (App Password Required)">
+                    <option value="icloud">Apple iCloud (CalDAV)</option>
+                    <option value="caldav">Generic CalDAV</option>
+                </optgroup>
+            </select>
+        </div>
+        
+        <div id="google-fields" style="display: none;">
+            <div class="alert alert-info">
+                <strong>Google Calendar:</strong> Sadece takvim okuma yetkisi kullanılır.
+            </div>
+            
+            {% if not google_configured %}
+            <div class="alert alert-warning">
+                Google OAuth ayarları yapılmamış. Lütfen önce <a href="/settings">Settings sayfasından</a> Client ID ve Secret girin.
+            </div>
+            {% elif not google_connected %}
+            <div class="alert alert-warning">
+                <strong>Hesap bağlanmamış.</strong> Takvimlerinize erişmek için Google hesabınızı bağlayın.
+                <div class="mt-2">
+                    <a href="/auth/google?return_to=sources_add" class="btn btn-success">Connect Google Account</a>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <strong>Google bağlı!</strong> 
+                {% if google_email %}<span class="badge">{{ google_email }}</span>{% endif %}
+                <a href="/auth/google/disconnect?return_to=sources_add" class="btn btn-sm btn-danger ml-2">Disconnect</a>
+            </div>
+            <div class="form-group">
+                <label for="google_calendar_id">Calendar</label>
+                <select id="google_calendar_id" name="google_calendar_id" class="form-control">
+                    <option value="primary">Primary Calendar</option>
+                    {% if google_calendars %}
+                    {% for cal in google_calendars %}
+                    <option value="{{ cal.id }}">{{ cal.summary }}{% if cal.primary %} (Primary){% endif %}</option>
+                    {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+            <p class="text-small text-muted">Farklı bir hesap kullanmak için önce Disconnect yapıp yeniden Connect edin.</p>
+            {% endif %}
+        </div>
+        
+        <div id="outlook-fields" style="display: none;">
+            <div class="alert alert-info">
+                <strong>Microsoft Outlook:</strong> Sadece takvim okuma yetkisi kullanılır.
+            </div>
+            
+            {% if not outlook_configured %}
+            <div class="alert alert-warning">
+                Outlook OAuth ayarları yapılmamış. Lütfen önce <a href="/settings">Settings sayfasından</a> Client ID ve Secret girin.
+            </div>
+            {% elif not outlook_connected %}
+            <div class="alert alert-warning">
+                <strong>Hesap bağlanmamış.</strong> Takvimlerinize erişmek için Outlook hesabınızı bağlayın.
+                <div class="mt-2">
+                    <a href="/auth/outlook?return_to=sources_add" class="btn btn-success">Connect Outlook Account</a>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <strong>Outlook bağlı!</strong>
+                {% if outlook_email %}<span class="badge">{{ outlook_email }}</span>{% endif %}
+                <a href="/auth/outlook/disconnect?return_to=sources_add" class="btn btn-sm btn-danger ml-2">Disconnect</a>
+            </div>
+            <div class="form-group">
+                <label for="outlook_calendar_id">Calendar</label>
+                <select id="outlook_calendar_id" name="outlook_calendar_id" class="form-control">
+                    <option value="">Default Calendar</option>
+                    {% if outlook_calendars %}
+                    {% for cal in outlook_calendars %}
+                    <option value="{{ cal.id }}">{{ cal.name }}{% if cal.isDefaultCalendar %} (Default){% endif %}</option>
+                    {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+            <p class="text-small text-muted">Farklı bir hesap kullanmak için önce Disconnect yapıp yeniden Connect edin.</p>
+            {% endif %}
+        </div>
+        
+        <div id="ics-feed-fields" style="display: none;">
+            <div class="alert alert-info">
+                <strong>ICS/Webcal Feed:</strong> Apple paylaşımlı takvimler ve diğer public ICS feed'leri için. Kullanıcı adı/şifre gerekmez.
+            </div>
+            
+            <div class="form-group">
+                <label for="ics_url">ICS/Webcal URL</label>
+                <input type="text" id="ics_url" name="ics_url" placeholder="webcal://... veya https://...calendar.ics">
+                <p class="text-small text-muted mt-2">
+                    Apple Calendar'dan paylaşımlı takvim linki (webcal://...) veya herhangi bir .ics dosya URL'si yapıştırın.
+                </p>
+            </div>
+        </div>
+        
+        <div id="caldav-fields" style="display: none;">
+            <div class="alert alert-info">
+                <strong>CalDAV:</strong> Apple iCloud ve diğer CalDAV sunucuları için app-password gereklidir.
+            </div>
+            
+            <div class="form-group">
+                <label for="caldav_url">CalDAV URL</label>
+                <input type="url" id="caldav_url" name="caldav_url" placeholder="https://caldav.example.com/user/calendar/">
+                <p class="text-small text-muted mt-2">
+                    <strong>iCloud URL:</strong> https://caldav.icloud.com/
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label for="username">Username / Email</label>
+                <input type="text" id="username" name="username" placeholder="your-email@example.com">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">App-Specific Password</label>
+                <input type="password" id="password" name="password">
+                <p class="text-small text-muted mt-2">
+                    <strong>iCloud:</strong> appleid.apple.com > Security > App-Specific Passwords adresinden oluşturun.
+                </p>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <div class="form-check">
+                <input type="checkbox" id="masking" name="masking">
+                <label for="masking">Enable Masking (show events as "Busy" in published calendar)</label>
+            </div>
+        </div>
+        
+        <div class="actions mt-4">
+            <button type="submit" class="btn btn-primary" id="submit-btn">Add Source</button>
+            <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function toggleFields() {
+    const sourceType = document.getElementById('source_type').value;
+    const googleFields = document.getElementById('google-fields');
+    const outlookFields = document.getElementById('outlook-fields');
+    const icsFeedFields = document.getElementById('ics-feed-fields');
+    const caldavFields = document.getElementById('caldav-fields');
+    
+    googleFields.style.display = 'none';
+    outlookFields.style.display = 'none';
+    icsFeedFields.style.display = 'none';
+    caldavFields.style.display = 'none';
+    
+    if (sourceType === 'google_calendar') {
+        googleFields.style.display = 'block';
+    } else if (sourceType === 'outlook_oauth') {
+        outlookFields.style.display = 'block';
+    } else if (sourceType === 'ics_feed') {
+        icsFeedFields.style.display = 'block';
+    } else if (sourceType === 'icloud' || sourceType === 'caldav') {
+        caldavFields.style.display = 'block';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', toggleFields);
+</script>
+{% endblock %}

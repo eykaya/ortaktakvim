@@ -1,0 +1,122 @@
+Act as a senior full-stack engineer and build a **single-user calendar aggregation and publishing app**.
+
+Goal:
+I personally use Google Calendar, Microsoft (Outlook / Office 365), and Apple Calendar. I want ONE small app where I can enter my calendar account details, aggregate all events, optionally mask the events from each account, and then publish a **single read-only calendar** that I can subscribe to from other calendar clients (ideally via CalDAV, but an ICS/webcal feed is acceptable if CalDAV is too heavy).
+
+High-level requirements:
+1. Single user only
+   - This app is for me only, not multi-tenant.
+   - A very simple authentication is enough (e.g. one admin user with password stored in an environment variable).
+
+2. Calendar sources
+   - I will manually enter my calendar account information.
+   - For each source, I should be able to configure:
+     - A name (e.g. “Google personal”, “Work O365”, “iCloud”).
+     - Provider type (generic CalDAV is enough; you don’t have to implement full OAuth flows).
+     - CalDAV URL or similar endpoint.
+     - Username and password (or app-specific password).
+     - A “masking” flag: **masked vs. not masked**.
+   - The app should periodically fetch/sync events from all configured sources (e.g. every 5–15 minutes with a background job).
+
+3. Masking behavior (per account)
+   - For each source calendar:
+     - If “masking = ON”:
+       - In the published unified calendar, events from this source should be **busy slots only**:
+         - Use a generic title like “Busy”.
+         - Do NOT expose original title, description, attendees, or detailed location.
+       - The time range (start/end) must remain correct.
+     - If “masking = OFF”:
+       - In the published unified calendar, include real event details:
+         - Summary/title.
+         - Start/end time.
+         - Location (if available).
+         - Description (optional).
+   - Internally (in the admin UI), I should see full event details regardless of masking, because it’s only for me.
+
+4. Unified calendar
+   - The app must merge all events from all sources into **one unified calendar**.
+   - Handle overlapping events from different sources simply by including both in the unified calendar (no advanced conflict resolution is needed).
+   - Store events in a local database so that the app can serve the calendar quickly without refetching from all sources each time.
+
+5. Publishing interface
+   - Provide a **read-only subscription endpoint** for the unified calendar:
+     - Preferably implement a minimal **CalDAV read-only calendar** so that standard clients can subscribe.
+     - Additionally (or alternatively), expose a **read-only ICS feed (webcal)** URL that I can subscribe to from other calendar apps.
+   - The subscription URL should be protected with either:
+     - A long random token in the URL, or
+     - Basic auth based on a subscription token.
+   - When the unified calendar is updated by the background sync, new events should appear in the subscribed clients on their next refresh.
+
+6. Admin web UI
+   - Simple dashboard page with:
+     - List of connected calendar accounts.
+     - For each account: name, type, CalDAV URL, username, masking flag (ON/OFF), last sync time, and a button to trigger a manual sync.
+     - A form to add a new calendar source (fields mentioned above).
+     - Ability to edit or delete an existing source.
+   - A “Preview unified calendar” view:
+     - Show a list of upcoming events as they will appear in the **published unified calendar** (i.e., after masking rules are applied).
+     - This helps me confirm that masking and aggregation are working correctly.
+   - Show the unified calendar subscription URL(s) so I can copy and paste them into other calendar clients.
+
+7. Technology stack (suggested, but you can choose a better stack if you think it’s necessary for CalDAV support)
+   - Backend:
+     - Python 3 with FastAPI (or another modern web framework that fits Replit well).
+     - Use a library for CalDAV client access to source calendars.
+     - Use SQLite as the database (via SQLAlchemy or similar ORM).
+     - Implement a background job / scheduler (e.g. APScheduler or a simple periodic task loop) to resync calendars.
+   - Publishing:
+     - Implement either:
+       - A minimal read-only CalDAV server endpoint, OR
+       - A dynamic ICS feed endpoint that generates an `.ics` file on the fly from the unified event data (this is easier and sufficient if CalDAV is too complex).
+   - Frontend:
+     - A simple web UI is enough: server-rendered templates or a small SPA.
+     - No need for complex styling; function is more important than design.
+
+8. Data model (example)
+   - `CalendarSource`:
+     - id
+     - name
+     - type (enum: generic_caldav, etc.)
+     - caldav_url
+     - username
+     - encrypted_password (store securely, not in plain text)
+     - masking (boolean)
+     - created_at, updated_at
+   - `Event`:
+     - id
+     - source_id (FK to CalendarSource)
+     - original_uid (event id from source)
+     - start_datetime
+     - end_datetime
+     - original_summary
+     - original_description
+     - original_location
+     - is_all_day
+     - last_synced_at
+
+   At runtime, the app will compute the “published view” of each event based on the `masking` flag of its source:
+     - If masked: summary = "Busy", hide description and attendees in the unified export.
+     - If not masked: use original fields.
+
+9. Non-functional requirements
+   - Error handling:
+     - If a source calendar cannot be synced (wrong credentials, network error, etc.), show a clear error in the admin UI.
+   - Security:
+     - Do not log sensitive credentials.
+     - Make it easy to configure credentials and secret keys via environment variables in Replit.
+   - Documentation:
+     - Include in the README:
+       - How to run the app in Replit.
+       - How to configure calendar sources.
+       - How to get the unified subscription URL and add it to Google/Apple/Outlook as a subscribed calendar.
+       - Any limitations, especially if CalDAV server functionality is partial or replaced by ICS.
+
+Deliverables:
+- Complete working code for the backend and the minimal admin UI.
+- A clear README explaining:
+  - Setup on Replit.
+  - How to add my calendar sources.
+  - How masking works.
+  - How to subscribe to the unified calendar from external clients.
+
+If any of the requirements above conflict with Replit constraints or libraries, please explain the trade-offs and choose the most robust, simplest approach that still achieves the main goal: **one unified read-only calendar feed with per-account masking**.

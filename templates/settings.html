@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}OAuth Settings - Calendar Aggregator{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>OAuth Settings</h2>
+    <p class="text-muted mb-4">Configure your OAuth credentials for Google and Microsoft. After saving, you can connect your accounts when adding calendar sources.</p>
+    
+    {% if message %}
+    <div class="alert alert-success">{{ message }}</div>
+    {% endif %}
+    
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Google Calendar OAuth</h2>
+    <p class="text-muted text-small mb-4">
+        Create a Google Cloud project and OAuth credentials at 
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>.
+    </p>
+    
+    <form method="POST" action="/settings/google">
+        <div class="form-group">
+            <label for="google_client_id">Client ID</label>
+            <input type="text" id="google_client_id" name="client_id" 
+                   value="{{ google_settings.client_id if google_settings and google_settings.client_id else '' }}"
+                   placeholder="xxxx.apps.googleusercontent.com">
+        </div>
+        <div class="form-group">
+            <label for="google_client_secret">Client Secret</label>
+            <input type="password" id="google_client_secret" name="client_secret" 
+                   placeholder="{% if google_settings and google_settings.is_configured %}(saved - enter new to change){% else %}Enter client secret{% endif %}">
+        </div>
+        <div class="form-group">
+            <label>Redirect URI (add this to Google Cloud Console)</label>
+            <div class="url-box">
+                <code>{{ base_url }}/auth/google/callback</code>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="copyToClipboard('{{ base_url }}/auth/google/callback')">Copy</button>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">Save Google Settings</button>
+            {% if google_settings and google_settings.is_configured %}
+            <span class="badge badge-success">Configured</span>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Microsoft Outlook OAuth</h2>
+    <p class="text-muted text-small mb-4">
+        Create an Azure App Registration at 
+        <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank">Azure Portal</a>.
+    </p>
+    
+    <form method="POST" action="/settings/outlook">
+        <div class="form-group">
+            <label for="outlook_client_id">Application (Client) ID</label>
+            <input type="text" id="outlook_client_id" name="client_id" 
+                   value="{{ outlook_settings.client_id if outlook_settings and outlook_settings.client_id else '' }}"
+                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+        </div>
+        <div class="form-group">
+            <label for="outlook_tenant_id">Directory (Tenant) ID</label>
+            <input type="text" id="outlook_tenant_id" name="tenant_id" 
+                   value="{{ outlook_settings.tenant_id if outlook_settings and outlook_settings.tenant_id else '' }}"
+                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (Azure Portal > Overview)">
+            <small class="text-muted">Kurumsal hesaplar için zorunlu. Azure Portal > App registrations > Overview sayfasından kopyalayın.</small>
+        </div>
+        <div class="form-group">
+            <label for="outlook_client_secret">Client Secret</label>
+            <input type="password" id="outlook_client_secret" name="client_secret" 
+                   placeholder="{% if outlook_settings and outlook_settings.is_configured %}(saved - enter new to change){% else %}Enter client secret{% endif %}">
+        </div>
+        <div class="form-group">
+            <label>Redirect URI (add this to Azure Portal)</label>
+            <div class="url-box">
+                <code>{{ base_url }}/auth/outlook/callback</code>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="copyToClipboard('{{ base_url }}/auth/outlook/callback')">Copy</button>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">Save Outlook Settings</button>
+            {% if outlook_settings and outlook_settings.is_configured %}
+            <span class="badge badge-success">Configured</span>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Setup Instructions</h2>
+    
+    <h3 class="mt-4">Google Calendar Setup</h3>
+    <ol class="text-small">
+        <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a></li>
+        <li>Create a new project or select existing</li>
+        <li><strong>Enable "Google Calendar API"</strong> - This is required!</li>
+        <li>Go to "Credentials" > "Create Credentials" > "OAuth client ID"</li>
+        <li>Select "Web application"</li>
+        <li>Add the Redirect URI shown above</li>
+        <li>Copy Client ID and Client Secret here</li>
+        <li>In "OAuth consent screen", add scope: <code>calendar.readonly</code></li>
+    </ol>
+    
+    <h3 class="mt-4">Microsoft Outlook Setup</h3>
+    <ol class="text-small">
+        <li>Go to <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade" target="_blank">Azure Portal > App registrations</a></li>
+        <li>Click "New registration"</li>
+        <li>Name your app and select account type</li>
+        <li>Add the Redirect URI shown above (Web type)</li>
+        <li>Go to "API permissions" > "Add permission" > "Microsoft Graph"</li>
+        <li>Add "Calendars.Read" (Delegated)</li>
+        <li>Go to "Certificates & secrets" > "New client secret"</li>
+        <li>Copy Application ID and Client Secret here</li>
+    </ol>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Copied to clipboard!');
+    });
+}
+</script>
+{% endblock %}

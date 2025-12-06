@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Calendar Preview - Calendar Aggregator{% endblock %}
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Unified Calendar Preview</h2>
+        <div class="actions">
+            <button class="btn btn-secondary btn-sm" onclick="toggleView('calendar')">Calendar View</button>
+            <button class="btn btn-secondary btn-sm" onclick="toggleView('list')">List View</button>
+        </div>
+    </div>
+    
+    <p class="text-muted mb-4">
+        This shows how events will appear in the published unified calendar. 
+        <span class="badge badge-info">Blue</span> = Full details
+        <span class="badge badge-danger">Red</span> = Masked (Busy)
+    </p>
+    
+    <div id="calendar-view">
+        <div id="calendar"></div>
+    </div>
+    
+    <div id="list-view" style="display: none;">
+        {% if events %}
+        {% for event in events %}
+        <div class="event-item {% if event.is_masked %}masked{% endif %}">
+            <div class="event-time">
+                {% if event.is_all_day %}
+                {{ event.start.strftime('%Y-%m-%d') }} (All day)
+                {% else %}
+                {{ event.start.strftime('%Y-%m-%d %H:%M') }} - {{ event.end.strftime('%H:%M') }}
+                {% endif %}
+            </div>
+            <div class="event-title">{{ event.summary }}</div>
+            {% if event.location and not event.is_masked %}
+            <div class="text-small text-muted">{{ event.location }}</div>
+            {% endif %}
+            {% if event.description and not event.is_masked %}
+            <div class="text-small text-muted" style="margin-top: 0.25rem;">{{ event.description[:200] }}{% if event.description|length > 200 %}...{% endif %}</div>
+            {% endif %}
+            <div class="event-source">
+                Source: {{ event.source_name }} 
+                {% if event.is_masked %}<span class="badge badge-warning">Masked</span>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted">No events to display. Make sure you have added calendar sources and synced them.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="event-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <h3 id="modal-title"></h3>
+        <div id="modal-body"></div>
+    </div>
+</div>
+
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+
+<style>
+    #calendar {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+    .fc {
+        font-family: inherit;
+    }
+    .fc-event {
+        cursor: pointer;
+    }
+    .fc-event-title {
+        font-weight: 500;
+    }
+    .modal {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-content {
+        background-color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
+        position: relative;
+    }
+    .modal-close {
+        position: absolute;
+        right: 1rem;
+        top: 0.5rem;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #666;
+    }
+    .modal-close:hover {
+        color: #333;
+    }
+    #modal-title {
+        margin-bottom: 1rem;
+        padding-right: 2rem;
+    }
+    .event-detail {
+        margin-bottom: 0.75rem;
+    }
+    .event-detail-label {
+        font-weight: 600;
+        color: #666;
+        font-size: 0.85rem;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var calendarEl = document.getElementById('calendar');
+    var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+        },
+        events: '/api/events',
+        eventClick: function(info) {
+            showEventDetails(info.event);
+        },
+        eventDidMount: function(info) {
+            if (info.event.extendedProps.isMasked) {
+                info.el.title = 'Busy (Masked Event)';
+            } else {
+                info.el.title = info.event.title;
+            }
+        },
+        height: 'auto',
+        aspectRatio: 1.8,
+        nowIndicator: true,
+        navLinks: true,
+        editable: false,
+        selectable: false
+    });
+    calendar.render();
+});
+
+function toggleView(view) {
+    var calendarView = document.getElementById('calendar-view');
+    var listView = document.getElementById('list-view');
+    
+    if (view === 'calendar') {
+        calendarView.style.display = 'block';
+        listView.style.display = 'none';
+    } else {
+        calendarView.style.display = 'none';
+        listView.style.display = 'block';
+    }
+}
+
+function showEventDetails(event) {
+    var modal = document.getElementById('event-modal');
+    var title = document.getElementById('modal-title');
+    var body = document.getElementById('modal-body');
+    
+    title.textContent = event.title;
+    
+    var startDate = event.start ? event.start.toLocaleString() : 'N/A';
+    var endDate = event.end ? event.end.toLocaleString() : 'N/A';
+    
+    var html = '<div class="event-detail"><span class="event-detail-label">Time:</span><br>' + startDate + ' - ' + endDate + '</div>';
+    
+    if (event.extendedProps.source) {
+        html += '<div class="event-detail"><span class="event-detail-label">Source:</span><br>' + event.extendedProps.source + '</div>';
+    }
+    
+    if (event.extendedProps.isMasked) {
+        html += '<div class="event-detail"><span class="badge badge-warning">This event is masked</span></div>';
+    } else {
+        if (event.extendedProps.location) {
+            html += '<div class="event-detail"><span class="event-detail-label">Location:</span><br>' + event.extendedProps.location + '</div>';
+        }
+        if (event.extendedProps.description) {
+            html += '<div class="event-detail"><span class="event-detail-label">Description:</span><br>' + event.extendedProps.description + '</div>';
+        }
+    }
+    
+    body.innerHTML = html;
+    modal.style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('event-modal').style.display = 'none';
+}
+
+document.getElementById('event-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeModal();
+    }
+});
+</script>
+{% endblock %}

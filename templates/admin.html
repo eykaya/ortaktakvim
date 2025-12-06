@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - Calendar Aggregator{% endblock %}
+
+{% block content %}
+{% if message %}
+<div class="alert alert-success">{{ message }}</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="tabs">
+    <a href="/admin" class="active">Users</a>
+    <a href="/settings">OAuth Settings</a>
+    <a href="/admin/logs">Logs</a>
+</div>
+
+<div class="grid-2">
+    <div class="card">
+        <h2>Add New User</h2>
+        <form method="POST" action="/admin/users/add">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email (optional)</label>
+                <input type="email" id="email" name="email">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="role">Role</label>
+                <select id="role" name="role">
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Add User</button>
+        </form>
+    </div>
+    
+    <div class="card">
+        <h2>General Settings</h2>
+        <form method="POST" action="/admin/settings/general">
+            <div class="form-group">
+                <label for="base_url">Base URL</label>
+                <input type="url" id="base_url" name="base_url" value="{{ settings.base_url }}" placeholder="https://your-domain.com">
+                <small class="text-muted">Used for OAuth redirects. Leave as default for automatic detection.</small>
+            </div>
+            <div class="form-group">
+                <label for="public_domain">Public Domain (for ICS feeds)</label>
+                <input type="url" id="public_domain" name="public_domain" value="{{ settings.public_domain }}" placeholder="https://your-public-domain.com">
+                <small class="text-muted">If set, ICS feed URLs will use this domain instead of the base URL.</small>
+            </div>
+            <div class="form-group">
+                <label for="app_name">Application Name</label>
+                <input type="text" id="app_name" name="app_name" value="{{ settings.app_name }}">
+            </div>
+            <div class="form-group">
+                <label for="sync_interval">Sync Interval (minutes)</label>
+                <input type="number" id="sync_interval" name="sync_interval" value="{{ settings.sync_interval_minutes }}" min="1" max="1440">
+                <small class="text-muted">How often to sync all calendars (1-1440 minutes, default: 10)</small>
+            </div>
+            <button type="submit" class="btn btn-success">Save Settings</button>
+        </form>
+        
+        <hr style="margin: 1.5rem 0; border-color: #e0e0e0;">
+        
+        <h3>Sync Status</h3>
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <strong>Current Interval:</strong> {{ current_interval }} minutes<br>
+                <strong>Next Sync:</strong> 
+                {% if next_sync %}
+                    {{ next_sync.strftime('%Y-%m-%d %H:%M:%S') }}
+                {% else %}
+                    Not scheduled
+                {% endif %}
+            </div>
+            <form method="POST" action="/admin/sync/trigger" style="margin-left: auto;">
+                <button type="submit" class="btn btn-primary">
+                    Sync Now
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Users</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td>
+                    {{ u.username }}
+                    {% if u.id == user.id %}
+                    <span class="badge badge-info">You</span>
+                    {% endif %}
+                </td>
+                <td>{{ u.email or '-' }}</td>
+                <td>
+                    {% if u.role.value == 'admin' %}
+                    <span class="badge badge-admin">Admin</span>
+                    {% else %}
+                    <span class="badge badge-info">User</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if u.is_active %}
+                    <span class="badge badge-success">Active</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '-' }}</td>
+                <td class="actions">
+                    {% if u.id != user.id %}
+                    <form method="POST" action="/admin/users/{{ u.id }}/toggle-active" style="display:inline;">
+                        <button type="submit" class="btn btn-sm {% if u.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                            {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
+                        </button>
+                    </form>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="showResetPasswordModal({{ u.id }}, '{{ u.username }}')">
+                        Reset Password
+                    </button>
+                    <form method="POST" action="/admin/users/{{ u.id }}/delete" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete user {{ u.username }}?');">
+                        <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="resetPasswordModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000;">
+    <div style="background:white; max-width:400px; margin:100px auto; padding:2rem; border-radius:8px;">
+        <h3 style="margin-bottom:1rem;">Reset Password for <span id="resetUserName"></span></h3>
+        <form id="resetPasswordForm" method="POST">
+            <div class="form-group">
+                <label for="new_password">New Password</label>
+                <input type="password" id="new_password" name="new_password" required>
+            </div>
+            <div class="actions">
+                <button type="submit" class="btn btn-primary">Reset Password</button>
+                <button type="button" class="btn btn-secondary" onclick="hideResetPasswordModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function showResetPasswordModal(userId, username) {
+    document.getElementById('resetUserName').textContent = username;
+    document.getElementById('resetPasswordForm').action = '/admin/users/' + userId + '/reset-password';
+    document.getElementById('resetPasswordModal').style.display = 'block';
+}
+
+function hideResetPasswordModal() {
+    document.getElementById('resetPasswordModal').style.display = 'none';
+}
+</script>
+{% endblock %}

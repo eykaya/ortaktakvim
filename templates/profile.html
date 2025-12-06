@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - Calendar Aggregator{% endblock %}
+
+{% block content %}
+{% if message %}
+<div class="alert alert-success">{{ message }}</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="grid-2">
+    <div class="card">
+        <h2>Profile Information</h2>
+        <table>
+            <tr>
+                <td><strong>Username</strong></td>
+                <td>{{ user.username }}</td>
+            </tr>
+            <tr>
+                <td><strong>Email</strong></td>
+                <td>{{ user.email or 'Not set' }}</td>
+            </tr>
+            <tr>
+                <td><strong>Role</strong></td>
+                <td>
+                    {% if user.role.value == 'admin' %}
+                    <span class="badge badge-admin">Admin</span>
+                    {% else %}
+                    <span class="badge badge-info">User</span>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Member Since</strong></td>
+                <td>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '-' }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="card">
+        <h2>Change Password</h2>
+        <form method="POST" action="/profile/change-password">
+            <div class="form-group">
+                <label for="current_password">Current Password</label>
+                <input type="password" id="current_password" name="current_password" required>
+            </div>
+            <div class="form-group">
+                <label for="new_password">New Password</label>
+                <input type="password" id="new_password" name="new_password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Change Password</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Your Calendar Feed</h2>
+    <p class="text-muted mb-4">Add this URL to any calendar app (Google Calendar, Apple Calendar, Outlook) to subscribe to your unified calendar.</p>
+    
+    <div class="form-group">
+        <label>ICS Feed URL</label>
+        <div class="url-box">
+            <code>{{ ics_url }}</code>
+            <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('{{ ics_url }}')">Copy</button>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label>Webcal URL (Direct Subscribe)</label>
+        <div class="url-box">
+            <code>{{ webcal_url }}</code>
+            <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('{{ webcal_url }}')">Copy</button>
+            <a href="{{ webcal_url }}" class="btn btn-sm btn-primary">Subscribe</a>
+        </div>
+    </div>
+    
+    <div class="alert alert-warning mt-4">
+        <strong>Security Note:</strong> Your feed token is private. Anyone with this URL can see your calendar events. 
+        If you think it's been compromised, regenerate it below.
+    </div>
+    
+    <form method="POST" action="/profile/regenerate-token" onsubmit="return confirm('Are you sure? This will invalidate your current feed URL and you will need to re-subscribe in all calendar apps.');">
+        <button type="submit" class="btn btn-warning">Regenerate Feed Token</button>
+    </form>
+</div>
+{% endblock %}
