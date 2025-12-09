@@ -1,5 +1,5 @@
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from icalendar import Calendar
 from dateutil import parser as date_parser
@@ -56,20 +56,29 @@ def parse_ics_content(ics_content: str) -> List[dict]:
                 
                 start_dt = dtstart.dt
                 is_all_day = False
-                
+
                 if isinstance(start_dt, datetime):
+                    # Timezone'lu datetime ise UTC'ye çevir
                     if start_dt.tzinfo:
-                        start_dt = start_dt.replace(tzinfo=None)
+                        start_dt = start_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                    # Timezone bilgisi yoksa UTC olarak kabul et
+                    else:
+                        pass  # Zaten timezone yok, UTC olarak kabul ediliyor
                 else:
+                    # Date ise all-day event
                     is_all_day = True
                     start_dt = datetime.combine(start_dt, datetime.min.time())
-                
+
                 if dtend:
                     end_dt = dtend.dt
                     if isinstance(end_dt, datetime):
+                        # Timezone'lu datetime ise UTC'ye çevir
                         if end_dt.tzinfo:
-                            end_dt = end_dt.replace(tzinfo=None)
+                            end_dt = end_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        else:
+                            pass  # Zaten timezone yok, UTC olarak kabul ediliyor
                     else:
+                        # Date ise datetime'a çevir
                         end_dt = datetime.combine(end_dt, datetime.min.time())
                 else:
                     end_dt = start_dt + timedelta(hours=1)

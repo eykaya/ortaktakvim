@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 import caldav
 from icalendar import Calendar as ICalendar
@@ -47,18 +47,22 @@ def fetch_caldav_events(
                                 start_dt = dtstart.dt
                                 is_all_day = not hasattr(start_dt, 'hour')
                                 if is_all_day:
+                                    # Date ise datetime'a çevir
                                     start_dt = datetime.combine(start_dt, datetime.min.time())
                                 elif hasattr(start_dt, 'tzinfo') and start_dt.tzinfo:
-                                    start_dt = start_dt.replace(tzinfo=None)
+                                    # Timezone'lu datetime ise UTC'ye çevir
+                                    start_dt = start_dt.astimezone(timezone.utc).replace(tzinfo=None)
                             else:
                                 continue
-                            
+
                             if dtend:
                                 end_dt = dtend.dt
                                 if not hasattr(end_dt, 'hour'):
+                                    # Date ise datetime'a çevir
                                     end_dt = datetime.combine(end_dt, datetime.min.time())
                                 elif hasattr(end_dt, 'tzinfo') and end_dt.tzinfo:
-                                    end_dt = end_dt.replace(tzinfo=None)
+                                    # Timezone'lu datetime ise UTC'ye çevir
+                                    end_dt = end_dt.astimezone(timezone.utc).replace(tzinfo=None)
                             else:
                                 end_dt = start_dt + timedelta(hours=1)
                             

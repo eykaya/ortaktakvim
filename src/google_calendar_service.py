@@ -1,6 +1,6 @@
 import os
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -105,8 +105,12 @@ async def fetch_google_calendar_events(
             else:
                 start_str = start.get("dateTime", "")
                 end_str = end.get("dateTime", "")
-                start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00")).replace(tzinfo=None)
-                end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                # Google Calendar API her zaman timezone içerir, UTC'ye çevir
+                start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+                # UTC'ye çevir ve timezone bilgisini kaldır (veritabanında naive datetime kullanıyoruz)
+                start_dt = start_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                end_dt = end_dt.astimezone(timezone.utc).replace(tzinfo=None)
             
             events.append({
                 "uid": event["id"],

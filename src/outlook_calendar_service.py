@@ -1,6 +1,6 @@
 import os
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 
@@ -112,14 +112,27 @@ async def fetch_outlook_calendar_events(
                     
                     start_str = start.get("dateTime", "")
                     end_str = end.get("dateTime", "")
-                    
+
                     if start_str:
-                        start_dt = datetime.fromisoformat(start_str.replace("Z", ""))
+                        # Outlook API UTC header ile UTC zamanı döner
+                        # Eğer timezone bilgisi varsa parse et
+                        if "Z" in start_str or "+" in start_str or start_str.count("-") > 2:
+                            start_dt = datetime.fromisoformat(start_str.replace("Z", "+00:00"))
+                            # UTC'ye çevir ve timezone bilgisini kaldır
+                            start_dt = start_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        else:
+                            # Zaten UTC olarak geliyorsa
+                            start_dt = datetime.fromisoformat(start_str)
                     else:
                         continue
-                    
+
                     if end_str:
-                        end_dt = datetime.fromisoformat(end_str.replace("Z", ""))
+                        # Aynı işlemi end için yap
+                        if "Z" in end_str or "+" in end_str or end_str.count("-") > 2:
+                            end_dt = datetime.fromisoformat(end_str.replace("Z", "+00:00"))
+                            end_dt = end_dt.astimezone(timezone.utc).replace(tzinfo=None)
+                        else:
+                            end_dt = datetime.fromisoformat(end_str)
                     else:
                         end_dt = start_dt + timedelta(hours=1)
                     

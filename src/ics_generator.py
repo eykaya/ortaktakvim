@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from icalendar import Calendar as ICalendar, Event as IEvent
 from sqlalchemy.orm import Session
+import pytz
 
 from .models import Event, CalendarSource
 
@@ -30,11 +31,16 @@ def generate_unified_ics(db: Session, apply_masking: bool = True, user_id: int =
         ievent.add("uid", f"{event.original_uid}@calendar-aggregator")
         
         if event.is_all_day:
+            # All-day events için sadece tarih kullan
             ievent.add("dtstart", event.start_datetime.date())
             ievent.add("dtend", event.end_datetime.date())
         else:
-            ievent.add("dtstart", event.start_datetime)
-            ievent.add("dtend", event.end_datetime)
+            # Veritabanında naive datetime olarak UTC saklıyoruz
+            # ICS'e yazarken UTC timezone bilgisi ekle
+            start_utc = event.start_datetime.replace(tzinfo=pytz.UTC)
+            end_utc = event.end_datetime.replace(tzinfo=pytz.UTC)
+            ievent.add("dtstart", start_utc)
+            ievent.add("dtend", end_utc)
         
         if apply_masking and source.masking:
             ievent.add("summary", "Busy")
@@ -56,19 +62,24 @@ def get_unified_events(db: Session, apply_masking: bool = True, upcoming_only: b
     query = db.query(Event).join(CalendarSource).filter(
         CalendarSource.is_enabled == True
     )
-    
+
     if user_id is not None:
         query = query.filter(CalendarSource.user_id == user_id)
-    
+
     if upcoming_only:
         query = query.filter(Event.end_datetime >= datetime.utcnow())
-    
+
     events = query.order_by(Event.start_datetime).all()
-    
+
     result = []
     for event in events:
         source = event.source
-        
+
+        # Veritabanında naive datetime olarak UTC saklıyoruz
+        # API'ye dönerken UTC timezone bilgisi ekle
+        start_utc = event.start_datetime.replace(tzinfo=pytz.UTC)
+        end_utc = event.end_datetime.replace(tzinfo=pytz.UTC)
+
         if apply_masking and source.masking:
             result.append({
                 "id": event.id,
@@ -76,8 +87,8 @@ def get_unified_events(db: Session, apply_masking: bool = True, upcoming_only: b
                 "summary": "Busy",
                 "description": "",
                 "location": "",
-                "start": event.start_datetime,
-                "end": event.end_datetime,
+                "start": start_utc,
+                "end": end_utc,
                 "is_all_day": event.is_all_day,
                 "is_masked": True
             })
@@ -88,10 +99,10 @@ def get_unified_events(db: Session, apply_masking: bool = True, upcoming_only: b
                 "summary": event.original_summary or "Untitled Event",
                 "description": event.original_description or "",
                 "location": event.original_location or "",
-                "start": event.start_datetime,
-                "end": event.end_datetime,
+                "start": start_utc,
+                "end": end_utc,
                 "is_all_day": event.is_all_day,
                 "is_masked": False
             })
-    
+
     return result
