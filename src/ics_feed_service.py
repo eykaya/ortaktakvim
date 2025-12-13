@@ -4,6 +4,16 @@ from typing import List
 from icalendar import Calendar
 from dateutil import parser as date_parser
 
+# Try to import recurring-ical-events library
+try:
+    import recurring_ical_events
+    RECURRING_SUPPORT = True
+    print("✓ recurring-ical-events library loaded successfully")
+except ImportError as e:
+    RECURRING_SUPPORT = False
+    print(f"✗ recurring-ical-events library NOT available: {e}")
+    print("  Recurring events will NOT be expanded. Install with: pip install recurring-ical-events")
+
 
 def normalize_ics_url(url: str) -> str:
     if url.startswith('webcal://'):
@@ -40,7 +50,21 @@ def parse_ics_content(ics_content: str) -> List[dict]:
     time_min = now - timedelta(days=30)
     time_max = now + timedelta(days=365)
     
-    for component in cal.walk():
+    # Use recurring_ical_events to expand recurring events
+    if RECURRING_SUPPORT:
+        try:
+            expanded_events = recurring_ical_events.of(cal).between(time_min, time_max)
+            expanded_list = list(expanded_events)
+            print(f"✓ ICS Feed: Expanded to {len(expanded_list)} event occurrences (including recurring)")
+            expanded_events = expanded_list
+        except Exception as e:
+            print(f"✗ ICS Feed: Error expanding recurring events: {e}")
+            expanded_events = cal.walk()
+    else:
+        print("✗ ICS Feed: Recurring events will NOT be expanded (library not available)")
+        expanded_events = cal.walk()
+    
+    for component in expanded_events:
         if component.name == "VEVENT":
             try:
                 uid = str(component.get('uid', ''))
@@ -83,11 +107,12 @@ def parse_ics_content(ics_content: str) -> List[dict]:
                 else:
                     end_dt = start_dt + timedelta(hours=1)
                 
-                if end_dt < time_min or start_dt > time_max:
-                    continue
+                # Create unique ID for each occurrence of recurring events
+                # Use uid + start_datetime to ensure uniqueness
+                unique_uid = f"{uid}_{start_dt.isoformat()}" if uid else f"ics_{start_dt.isoformat()}"
                 
                 events.append({
-                    "uid": uid,
+                    "uid": unique_uid,
                     "summary": summary,
                     "description": description,
                     "location": location,
@@ -99,4 +124,5 @@ def parse_ics_content(ics_content: str) -> List[dict]:
                 print(f"Error parsing event: {e}")
                 continue
     
+    print(f"ICS Feed: Parsed {len(events)} total events after expansion")
     return events

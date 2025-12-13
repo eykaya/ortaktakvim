@@ -305,15 +305,27 @@ async def fetch_google_events_custom(access_token: str, calendar_id: str = "prim
 
 async def fetch_microsoft_events_custom(access_token: str, calendar_id: str = None) -> list:
     async with httpx.AsyncClient() as client:
+        # Use calendarView endpoint to automatically expand recurring events
         if calendar_id:
-            url = f"https://graph.microsoft.com/v1.0/me/calendars/{calendar_id}/events"
+            url = f"https://graph.microsoft.com/v1.0/me/calendars/{calendar_id}/calendarView"
         else:
-            url = "https://graph.microsoft.com/v1.0/me/calendar/events"
+            url = "https://graph.microsoft.com/v1.0/me/calendar/calendarView"
+        
+        # Set date range for calendarView (required parameter)
+        time_min = (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z"
+        time_max = (datetime.utcnow() + timedelta(days=365)).isoformat() + "Z"
+        
+        params = {
+            "startDateTime": time_min,
+            "endDateTime": time_max,
+            "$top": 500,
+            "$orderby": "start/dateTime"
+        }
         
         response = await client.get(
             url,
             headers={"Authorization": f"Bearer {access_token}"},
-            params={"$top": 250}
+            params=params
         )
         response.raise_for_status()
         return response.json().get("value", [])

@@ -67,8 +67,17 @@ def parse_microsoft_events(raw_events: List[dict]) -> List[dict]:
         location = item.get("location", {})
         location_str = location.get("displayName", "") if isinstance(location, dict) else ""
         
+        # For recurring events, each occurrence needs a unique ID
+        # Use id + start_datetime to ensure uniqueness for recurring event occurrences
+        event_id = item.get("id", "")
+        if event_id and start_dt:
+            # Create unique ID for each occurrence by combining event ID with start time
+            unique_uid = f"{event_id}_{start_dt.isoformat()}"
+        else:
+            unique_uid = event_id or f"microsoft_{start_dt.isoformat()}" if start_dt else "microsoft_unknown"
+        
         events.append({
-            "uid": item.get("id", ""),
+            "uid": unique_uid,
             "summary": item.get("subject", ""),
             "description": description,
             "location": location_str,

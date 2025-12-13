@@ -51,6 +51,9 @@ def generate_unified_ics(db: Session, apply_masking: bool = True, user_id: int =
             if event.original_location:
                 ievent.add("location", event.original_location)
         
+        # TRANSP:OPAQUE ensures events are shown as "busy" (not "free")
+        ievent.add("transp", "OPAQUE")
+        
         ievent.add("dtstamp", datetime.utcnow())
         
         cal.add_component(ievent)

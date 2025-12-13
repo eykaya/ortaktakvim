@@ -160,6 +160,185 @@ async def logout(request: Request, db: Session = Depends(get_db)):
     return response
 
 
+@app.get("/auth/google/login")
+async def google_login_start(request: Request, db: Session = Depends(get_db)):
+    # Check if already logged in
+    user = require_auth(request, db)
+    if user:
+        return RedirectResponse(url="/", status_code=302)
+    
+    settings = get_oauth_settings(db, "google")
+    if not settings or not settings.is_configured:
+        return RedirectResponse(url="/login?error=Google OAuth not configured. Please contact admin.", status_code=302)
+    
+    base_url = get_base_url(request, db)
+    redirect_uri = f"{base_url}/auth/google/login/callback"
+    state = "login"
+    auth_url = build_google_auth_url(settings.client_id, redirect_uri, state=state)
+    
+    return RedirectResponse(url=auth_url)
+
+
+@app.get("/auth/google/login/callback")
+async def google_login_callback(request: Request, code: str = None, error: str = None, state: str = None, db: Session = Depends(get_db)):
+    if error:
+        return RedirectResponse(url=f"/login?error=Google auth failed: {error}", status_code=302)
+    
+    if not code:
+        return RedirectResponse(url="/login?error=No authorization code received", status_code=302)
+    
+    settings = get_oauth_settings(db, "google")
+    if not settings:
+        return RedirectResponse(url="/login?error=Google OAuth not configured", status_code=302)
+    
+    base_url = get_base_url(request, db)
+    redirect_uri = f"{base_url}/auth/google/login/callback"
+    client_secret = get_decrypted_client_secret(settings)
+    
+    try:
+        # Exchange code for tokens
+        tokens = await exchange_google_code(code, settings.client_id, client_secret, redirect_uri)
+        
+        # Get user email from Google
+        user_email = await get_google_user_email(tokens["access_token"])
+        if not user_email:
+            return RedirectResponse(url="/login?error=Could not retrieve email from Google", status_code=302)
+        
+        # Find or create user
+        user = db.query(User).filter(User.email == user_email).first()
+        if not user:
+            # Create new user with email as username
+            username = user_email.split('@')[0]
+            # Ensure unique username
+            base_username = username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            user = User(
+                username=username,
+                email=user_email,
+                hashed_password=hash_password(secrets.token_hex(32)),  # Random password for OAuth users
+                role=UserRole.USER,
+                is_active=True,
+                feed_token=secrets.token_hex(32)
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            add_log(db, "INFO", f"New user created via Google OAuth: {user_email}", source="auth")
+        
+        # Create session
+        session_token = create_session(request, user, db)
+        add_log(db, "INFO", f"User '{user.username}' logged in via Google", source="auth")
+        
+        response = RedirectResponse(url="/", status_code=302)
+        response.set_cookie(
+            key="session_token",
+            value=session_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=604800
+        )
+        return response
+        
+    except Exception as e:
+        add_log(db, "ERROR", f"Google login error: {str(e)}", source="auth")
+        return RedirectResponse(url=f"/login?error=Failed to login with Google: {str(e)}", status_code=302)
+
+
+@app.get("/auth/microsoft/login")
+async def microsoft_login_start(request: Request, db: Session = Depends(get_db)):
+    # Check if already logged in
+    user = require_auth(request, db)
+    if user:
+        return RedirectResponse(url="/", status_code=302)
+    
+    settings = get_oauth_settings(db, "outlook")
+    if not settings or not settings.is_configured:
+        return RedirectResponse(url="/login?error=Microsoft OAuth not configured. Please contact admin.", status_code=302)
+    
+    base_url = get_base_url(request, db)
+    redirect_uri = f"{base_url}/auth/microsoft/login/callback"
+    state = "login"
+    auth_url = build_microsoft_auth_url(settings.client_id, redirect_uri, state=state, tenant_id=settings.tenant_id)
+    
+    return RedirectResponse(url=auth_url)
+
+
+@app.get("/auth/microsoft/login/callback")
+async def microsoft_login_callback(request: Request, code: str = None, error: str = None, state: str = None, error_description: str = None, db: Session = Depends(get_db)):
+    if error:
+        error_msg = error_description if error_description else error
+        return RedirectResponse(url=f"/login?error=Microsoft auth failed: {error_msg}", status_code=302)
+    
+    if not code:
+        return RedirectResponse(url="/login?error=No authorization code received", status_code=302)
+    
+    settings = get_oauth_settings(db, "outlook")
+    if not settings:
+        return RedirectResponse(url="/login?error=Microsoft OAuth not configured", status_code=302)
+    
+    base_url = get_base_url(request, db)
+    redirect_uri = f"{base_url}/auth/microsoft/login/callback"
+    client_secret = get_decrypted_client_secret(settings)
+    
+    try:
+        # Exchange code for tokens
+        tokens = await exchange_microsoft_code(code, settings.client_id, client_secret, redirect_uri, tenant_id=settings.tenant_id)
+        
+        # Get user email from Microsoft
+        user_email = await get_microsoft_user_email(tokens["access_token"])
+        if not user_email:
+            return RedirectResponse(url="/login?error=Could not retrieve email from Microsoft", status_code=302)
+        
+        # Find or create user
+        user = db.query(User).filter(User.email == user_email).first()
+        if not user:
+            # Create new user with email as username
+            username = user_email.split('@')[0]
+            # Ensure unique username
+            base_username = username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            user = User(
+                username=username,
+                email=user_email,
+                hashed_password=hash_password(secrets.token_hex(32)),  # Random password for OAuth users
+                role=UserRole.USER,
+                is_active=True,
+                feed_token=secrets.token_hex(32)
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            add_log(db, "INFO", f"New user created via Microsoft OAuth: {user_email}", source="auth")
+        
+        # Create session
+        session_token = create_session(request, user, db)
+        add_log(db, "INFO", f"User '{user.username}' logged in via Microsoft", source="auth")
+        
+        response = RedirectResponse(url="/", status_code=302)
+        response.set_cookie(
+            key="session_token",
+            value=session_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=604800
+        )
+        return response
+        
+    except Exception as e:
+        add_log(db, "ERROR", f"Microsoft login error: {str(e)}", source="auth")
+        return RedirectResponse(url=f"/login?error=Failed to login with Microsoft: {str(e)}", status_code=302)
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_panel(request: Request, db: Session = Depends(get_db)):
     from src.scheduler import get_current_interval, get_next_run_time
